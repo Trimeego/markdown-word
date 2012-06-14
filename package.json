@@ -1,0 +1,23 @@
+{
+  "author": "Jason Douglas <jason.douglas@trimeego.com>",
+  "name": "markdown-word",
+  "description": "A module for creating Word documents (docx) from Markdown",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Trimeego/markdown-word"
+  },
+  "engines": {
+    "node": "~0.6.8"
+  },
+  "dependencies" : {
+      "fs-extra": "0.1.x",
+      "markdown": "0.4.x",
+      "node-native-zip": "1.1.x",
+      "temp": "0.4.x",
+      "xml": "0.0.7"
+   },
+  "main": "index.js",   
+  "devDependencies": {},
+  "optionalDependencies": {}
+}
