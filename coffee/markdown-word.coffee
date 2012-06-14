@@ -1,7 +1,7 @@
 markdown = require( "markdown" ).markdown
 fs = require("fs-extra")
 temp = require("temp")
-zip = require("node-native-zip")
+zip = require("./zip/janzip.js")
 XML = require("xml")
 http = require("http")
 https = require("https")

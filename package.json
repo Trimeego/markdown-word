@@ -13,7 +13,6 @@
   "dependencies" : {
       "fs-extra": "0.1.x",
       "markdown": "0.4.x",
-      "node-native-zip": "1.1.x",
       "temp": "0.4.x",
       "xml": "0.0.7"
    },
