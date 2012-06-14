@@ -153,14 +153,16 @@ processMarkdownObject = (object, levelOffset) ->
 
   switch objectType
     when "markdown"
-      processChildElements elements, children, levelOffset
-      children.push documentSectionProps
-      out = 
-        "w:document": [
-          _attr: documentAttrs
-        ,
-          "w:body": children
-        ]
+      fragments = []
+      processChildElements elements, fragments, levelOffset
+      # children.push documentSectionProps
+      # out = 
+      #   "w:document": [
+      #     _attr: documentAttrs
+      #   ,
+      #     "w:body": children
+      #   ]
+      out = fragments
 
     when "header"
       [attributes, childElements...] = elements
@@ -393,14 +395,17 @@ walk = (dir, done) ->
 templatePath = __dirname + "/template"
 
 
+buildDocumentObjectFromFragments = (fragments) ->
+  fragments.push documentSectionProps
+  out = 
+    "w:document": [
+      _attr: documentAttrs
+    ,
+      "w:body": fragments
+    ]
 
-buildDocument = (inputMarkdown, outputFile, levelOffset) =>
-  if not outputFile
-    info = temp.openSync "md2word"
-    outputFile = info.path
-
-  markdownJSON = markdown.parse( inputMarkdown )
-  document = processMarkdownObject markdownJSON, levelOffset
+buildDocumentFromFragments = (fragments, outputFile) =>
+  document = buildDocumentObjectFromFragments(fragments)
   documentXML = 
       """
       <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -453,18 +458,23 @@ buildDocument = (inputMarkdown, outputFile, levelOffset) =>
 
   outputFile
 
-module.exports = 
-  fromFile: (filepath, outputFile, callback, levelOffset=0) ->
-    fs.readFile filepath, (err, data) ->
-      throw err if err 
-      out = buildDocument data, outputFile, levelOffset
-      callback(null, out)
+buildDocumentFromMarkdown = (inputMarkdown, outputFile, levelOffset) =>
+  if not outputFile
+    info = temp.openSync "md2word"
+    outputFile = info.path
 
-  fromMarkdown: (inputMarkdown, outputFile, callback, levelOffset=0) ->
-    out = buildDocument inputMarkdown, outputFile, levelOffset
-    callback(null, out)
+  markdownJSON = markdown.parse( inputMarkdown )
+  fragments = processMarkdownObject markdownJSON, levelOffset
+  buildDocumentFromFragments fragments, outputFile, levelOffset
 
-  fromUrl: (fileUrl, outputFile, callback, levelOffset=0) ->
+
+
+markdownFromFile = (filepath, callback) =>
+  fs.readFile filepath, (err, data) ->
+    callback(err,data)
+
+
+markdownFromUrl = (fileUrl, callback) =>
     inputMarkdown = ""
 
     if fileUrl.split(":")[0] is "https"
@@ -482,7 +492,42 @@ module.exports =
     lib.get options, (res) ->
       res.on 'data', (data) ->
         inputMarkdown += data
-      res.on 'end', () ->
-        out = buildDocument inputMarkdown, outputFile, levelOffset
-        callback(null, out)
+      res.on 'end', () -> 
+        callback(null, inputMarkdown)
 
+
+module.exports = 
+  documentFromFile: (filepath, outputFile, callback, levelOffset=0) ->
+    markdownFromFile filepath, (err, data) ->
+      out = buildDocumentFromMarkdown data, outputFile, levelOffset
+      callback(null, out)
+
+  documentFromMarkdown: (inputMarkdown, outputFile, callback, levelOffset=0) ->
+    out = buildDocumentFromMarkdown inputMarkdown, outputFile, levelOffset
+    callback(null, out)
+
+  documentFromUrl: (fileUrl, outputFile, callback, levelOffset=0) ->
+    markdownFromUrl fileUrl, (err, data) ->
+      out = buildDocumentFromMarkdown(data, outputFile, levelOffset);
+      callback(null, out);
+
+  documentFromFragments: (fragments, outputFile, callback) ->
+      out = buildDocumentFromFragments fragments, outputFile
+      callback(null, out);
+
+  fragmentsFromFile: (filepath, outputFile, callback, levelOffset=0) ->
+    markdownFromFile filepath, (err, data) ->
+      markdownJSON = markdown.parse( data )
+      fragments = processMarkdownObject markdownJSON, levelOffset
+      callback(null, fragments)
+
+  fragmentsFromMarkdown: (inputMarkdown, outputFile, callback, levelOffset=0) ->
+    markdownJSON = markdown.parse( inputMarkdown )
+    fragments = processMarkdownObject markdownJSON, levelOffset
+    callback(null, fragments)
+
+  fragmentsFromUrl: (fileUrl, outputFile, callback, levelOffset=0) ->
+    markdownFromUrl fileUrl, (err, data) ->
+      markdownJSON = markdown.parse( data )
+      fragments = processMarkdownObject markdownJSON, levelOffset
+      callback(null, fragments)
