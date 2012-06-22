@@ -2,7 +2,7 @@
   "author": "Jason Douglas <jason.douglas@trimeego.com>",
   "name": "markdown-word",
   "description": "A module for creating Word documents (docx) from Markdown",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Trimeego/markdown-word"

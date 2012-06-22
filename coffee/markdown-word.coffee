@@ -156,7 +156,6 @@ createUid = () ->
   uid = Math.abs(millis + id2 + counter + Math.round(Math.random(10)* 100))
 
 addRelationships = (rels) ->
-  console.log JSON.stringify(rels, null, 2)
   for rel in rels
     if rel
       relAttribs = 
@@ -510,13 +509,11 @@ buildDocumentObjectFromFragments = (fragments) ->
   docRelationships = []
 
   if fragments.markup
-    console.log fragments.relationships
     Array::push.apply docObjFragments, fragments.markup
     if fragments.relationships
       Array::push.apply docRelationships, fragments.relationships
   else
     for fragment in fragments
-      console.log fragment.relationships
       Array::push.apply docObjFragments, fragment.markup
       Array::push.apply docRelationships, fragment.relationships
     # docObjFragments.push documentSectionProps
@@ -539,7 +536,6 @@ buildDocumentObjectFromFragments = (fragments) ->
       ,
         "w:body": docObjFragments
       ]
-  # console.log JSON.stringify(out, null, 2)
   out
 
 buildDocumentFromFragments = (fragments, outputFile) =>
