@@ -666,6 +666,7 @@ module.exports =
       callback(null, out);
 
   fragmentsFromFile: (filepath, callback, levelOffset=0) ->
+    rootPath = path.dirname(path.resolve(filepath))    
     markdownFromFile filepath, (err, data) ->
       markdownJSON = markdown.parse( data )
 
@@ -678,6 +679,7 @@ module.exports =
     callback(null, fragments)
 
   fragmentsFromUrl: (fileUrl, callback, levelOffset, rootPath) ->
+    rootPath = url.parse(fileUrl)    
     markdownFromUrl fileUrl, (err, data) ->
       markdownJSON = markdown.parse( data )
       fragments = processMarkdownObject markdownJSON, levelOffset, rootPath
