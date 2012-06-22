@@ -4,7 +4,7 @@
 
   md = require("../lib/markdown-word");
 
-  md.documentFromFile("example.md", "./example.docx", (function(err, data) {
+  md.documentFromFile(__dirname + "/example.md", __dirname + "/example.docx", (function(err, data) {
     return console.log(err, JSON.stringify(data, null, 2));
   }), 0);
 
