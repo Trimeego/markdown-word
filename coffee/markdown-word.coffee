@@ -132,15 +132,19 @@ createUid = () ->
 addRelationships = (rels) ->
   for rel in rels
     if rel
+      relAttribs = 
+        "Id": rel.relId
+        "Type": rel.type
+        "Target": rel.href
+
+      if rel.targetMode
+        relAttribs["TargetMode"] = rel.targetMode
+
+
       relationships["Relationships"].push
         "Relationship": [
-          _attr: {
-            "Id": rel.relId
-            "Type": rel.type
-            "Target": rel.href
-            "TargetMode": rel.targetMode
-          }
-        ] 
+          _attr: relAttribs
+        ]
   relationships 
 
 processChildElements = (list, children, levelOffset, rels)->
@@ -154,7 +158,6 @@ processChildElements = (list, children, levelOffset, rels)->
           children.push r.markup 
         Array::push.apply rels, r.relationships
     else
-      console.log objectResults.markup 
       if Object.prototype.toString.call( objectResults.markup ) is '[object Array]'
         Array::push.apply children, objectResults.markup 
       else
@@ -184,7 +187,6 @@ processMarkdownObject = (object, levelOffset) ->
       #   ,
       #     "w:body": children
       #   ]
-      console.log JSON.stringify(fragments, null, 2)
       out = fragments
 
     when "header"
@@ -237,15 +239,18 @@ processMarkdownObject = (object, levelOffset) ->
           "w:p": children
 
     when "numberlist"
+      rid = createUid()
       out = []
       count = 0
       for el in elements
         count++
         children = [
           "w:pPr": [
-            "w:pStyle":
+            "w:pStyle": [
               _attr:
                 "w:val": "ListParagraph"
+
+            ]
           ,
             "w:numPr": [
               "w:ilvl":
@@ -254,8 +259,13 @@ processMarkdownObject = (object, levelOffset) ->
             ,
               "w:numId":
                 _attr:
-                  "w:val": "1"
+                  "w:val": "#{rid}"
             ]
+          ,
+            "w:ind":
+              _attr:
+                "w:left": "720"
+                "w:hanging": "360"
           ]
         ]
         [itemType, itemElements...] = el
@@ -269,6 +279,16 @@ processMarkdownObject = (object, levelOffset) ->
           "w:b": ""
         ]
       processChildElements elements, children, levelOffset, rels
+      children.push
+        "w:r": [
+          "w:t": [
+            _attr: 
+              "xml:space":"preserve"  
+          ,          
+            " "
+          ]
+        ] 
+
       out = 
         "w:r": children
 
@@ -278,6 +298,16 @@ processMarkdownObject = (object, levelOffset) ->
           "w:i": ""
         ]
       processChildElements elements, children, levelOffset, rels
+      children.push
+        "w:r": [
+          "w:t": [
+            _attr: 
+              "xml:space":"preserve"  
+          ,          
+            " "
+          ]
+        ] 
+
       out = 
         "w:r": children
 
@@ -350,10 +380,12 @@ processMarkdownObject = (object, levelOffset) ->
         "w:p": "" 
 
     when "link"
+      rid = "rId" + createUid()
+      title = elements[1]
       rels.push 
         href: elements[0].href
-        rid: "rId" + createUid()
-        title: elements[1]
+        rid: rid
+        title: title
         type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" 
         targetMode: "External"
       out = [
@@ -387,10 +419,22 @@ processMarkdownObject = (object, levelOffset) ->
       ]
 
     when "img"
-      out = 
-        "w:r": [
-          "w:t": "<<< #{objectType} not yet implemented>>>"
-        ]
+      rid = "rId" + createUid()
+      rels.push 
+        href: elements[0].href
+        rid: rid
+        type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" 
+
+      out = [
+        "w:pict": [
+          "v:shape": [
+            "v:imagedata": [
+              _attr:
+                "r:id": rid
+            ]
+          ]
+        ]  
+      ]
 
     when "text"
       #if it get's here it should just be a text element
@@ -436,7 +480,6 @@ templatePath = __dirname + "/template"
 buildDocumentObjectFromFragments = (fragments) ->
   docObjFragments = []
   docRelationships = []
-  console.log fragments
   if fragments.markup
       Array::push.apply docObjFragments, fragments.markup
       if fragments.relationships
@@ -447,7 +490,6 @@ buildDocumentObjectFromFragments = (fragments) ->
       Array::push.apply docRelationships, fragment.relationships
     # docObjFragments.push documentSectionProps
     
-  console.log JSON.stringify docObjFragments, null, 2
 
   out = 
     relationships: relationships
@@ -460,6 +502,7 @@ buildDocumentObjectFromFragments = (fragments) ->
   out
 
 buildDocumentFromFragments = (fragments, outputFile) =>
+  targetFiles = []
   document = buildDocumentObjectFromFragments(fragments)
   
   documentXML = 
@@ -467,7 +510,7 @@ buildDocumentFromFragments = (fragments, outputFile) =>
       <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
       #{XML(document.markup)}
       """    
-  console.log documentXML
+
   relationshipsXML = 
       """
       <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -475,9 +518,17 @@ buildDocumentFromFragments = (fragments, outputFile) =>
       """    
 
 
+  imageCount = 0
+  for image in document.relationships when image.type is "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+    imageCount++
+    targetFiles.push
+      name: "word/media/#{imageCount}"
+      path: image.href
+      compression: 'store'
+
+
   walk templatePath, (err, files) ->
 
-    targetFiles = []
     for file in files
       if file.indexOf(".DS_Store") is -1 
         targetFiles.push
@@ -555,7 +606,6 @@ markdownFromUrl = (fileUrl, callback) =>
 module.exports = 
   documentFromFile: (filepath, outputFile, callback, levelOffset=0) ->
     markdownFromFile filepath, (err, data) ->
-      console.log data
       out = buildDocumentFromMarkdown data, outputFile, levelOffset
       callback(null, out)
 

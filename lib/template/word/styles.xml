@@ -387,9 +387,10 @@
     <w:basedOn w:val="Normal"/>
     <w:uiPriority w:val="34"/>
     <w:qFormat/>
-    <w:rsid w:val="0067735E"/>
     <w:pPr>
-      <w:ind w:left="720"/>
+      <w:numPr>
+        <w:numId w:val="3"/>
+      </w:numPr>
       <w:contextualSpacing/>
     </w:pPr>
   </w:style>
