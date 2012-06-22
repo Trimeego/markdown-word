@@ -1,11 +1,13 @@
 markdown = require( "markdown" ).markdown
 fs = require("fs-extra")
+path = require("path")
 temp = require("temp")
 zip = require("./zip/janzip.js")
 XML = require("xml")
 http = require("http")
 https = require("https")
 url = require("url")
+
 
 
 documentAttrs =  
@@ -123,13 +125,38 @@ millisOld = 0
 counter = 0
 id = 1
 
+resolvePath = (from, to) ->
+  out = 
+    type: "absolute"
+    path: to
+
+  if from
+    if from.href
+      # url
+      toUrl = url.parse(to)
+      if not toUrl.host
+        #relative
+        out = 
+          type: "relative"
+          path: url(from, to)
+    else
+      # file path
+      if to.indexOf(".") is 0
+        #relative path
+        out = 
+          type: "relative"
+          path: path.resolve(from,to)      
+  out
+
+
 createUid = () ->
   protectRollover = false
   millis = new Date().getTime() - 1262304000000 * Math.pow(2, 12)
   id2 = id * Math.pow(2, 8)
-  uid = millis + id2 + counter
+  uid = Math.abs(millis + id2 + counter + Math.round(Math.random(10)* 100))
 
 addRelationships = (rels) ->
+  console.log JSON.stringify(rels, null, 2)
   for rel in rels
     if rel
       relAttribs = 
@@ -147,7 +174,7 @@ addRelationships = (rels) ->
         ]
   relationships 
 
-processChildElements = (list, children, levelOffset, rels)->
+processChildElements = (list, children, levelOffset, rels, rootPath)->
   for el in list
     objectResults = processMarkdownObject(el, levelOffset)
     if Object.prototype.toString.call( objectResults ) is '[object Array]'
@@ -167,7 +194,7 @@ processChildElements = (list, children, levelOffset, rels)->
 
 
 
-processMarkdownObject = (object, levelOffset) ->
+processMarkdownObject = (object, levelOffset, rootPath) ->
   children = []
   rels = [] 
   if Object.prototype.toString.call( object ) is '[object Array]'
@@ -179,7 +206,7 @@ processMarkdownObject = (object, levelOffset) ->
   switch objectType
     when "markdown"
       fragments = []
-      processChildElements elements, fragments, levelOffset, rels
+      processChildElements elements, fragments, levelOffset, rels, rootPath
       # children.push documentSectionProps
       # out = 
       #   "w:document": [
@@ -200,13 +227,13 @@ processMarkdownObject = (object, levelOffset) ->
           ]
         ]
 
-      processChildElements childElements, children, levelOffset, rels
+      processChildElements childElements, children, levelOffset, rels, rootPath
 
       out = 
         "w:p": children
 
     when "para"
-      processChildElements elements, children, levelOffset, rels
+      processChildElements elements, children, levelOffset, rels, rootPath
       out = 
         "w:p": children
     
@@ -233,7 +260,7 @@ processMarkdownObject = (object, levelOffset) ->
           ]
         ]
         [itemType, itemElements...] = el
-        processChildElements itemElements, children, levelOffset, rels
+        processChildElements itemElements, children, levelOffset, rels, rootPath
 
         out.push     
           "w:p": children
@@ -269,7 +296,7 @@ processMarkdownObject = (object, levelOffset) ->
           ]
         ]
         [itemType, itemElements...] = el
-        processChildElements itemElements, children, levelOffset, rels
+        processChildElements itemElements, children, levelOffset, rels, rootPath
         out.push     
           "w:p": children
 
@@ -278,7 +305,7 @@ processMarkdownObject = (object, levelOffset) ->
         "w:rPr": [
           "w:b": ""
         ]
-      processChildElements elements, children, levelOffset, rels
+      processChildElements elements, children, levelOffset, rels, rootPath
       children.push
         "w:r": [
           "w:t": [
@@ -297,7 +324,7 @@ processMarkdownObject = (object, levelOffset) ->
         "w:rPr": [
           "w:i": ""
         ]
-      processChildElements elements, children, levelOffset, rels
+      processChildElements elements, children, levelOffset, rels, rootPath
       children.push
         "w:r": [
           "w:t": [
@@ -354,7 +381,7 @@ processMarkdownObject = (object, levelOffset) ->
       ]
       lines = elements[0].split "\n"
       for l in lines
-        # r = processMarkdownObject ["code_line", l], levelOffset  
+        # r = processMarkdownObject ["code_line", l], levelOffset, rootPath  
         # rels.push r.relationships
         out.push 
           "w:p": [
@@ -380,10 +407,12 @@ processMarkdownObject = (object, levelOffset) ->
         "w:p": "" 
 
     when "link"
+      rp = resolvePath rootPath, elements[0].href
+      href = rp.path
       rid = "rId" + createUid()
       title = elements[1]
       rels.push 
-        href: elements[0].href
+        href: href
         rid: rid
         title: title
         type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" 
@@ -452,7 +481,6 @@ processMarkdownObject = (object, levelOffset) ->
   r = 
     markup: out
     relationships: rels
-  
 
 walk = (dir, done) ->
   results = []
@@ -480,17 +508,29 @@ templatePath = __dirname + "/template"
 buildDocumentObjectFromFragments = (fragments) ->
   docObjFragments = []
   docRelationships = []
+
   if fragments.markup
-      Array::push.apply docObjFragments, fragments.markup
-      if fragments.relationships
-        Array::push.apply docRelationships, fragments.relationships
+    console.log fragments.relationships
+    Array::push.apply docObjFragments, fragments.markup
+    if fragments.relationships
+      Array::push.apply docRelationships, fragments.relationships
   else
     for fragment in fragments
+      console.log fragment.relationships
       Array::push.apply docObjFragments, fragment.markup
       Array::push.apply docRelationships, fragment.relationships
     # docObjFragments.push documentSectionProps
     
-
+  for r in docRelationships
+    relationships["Relationships"].push 
+      "Relationship": [
+        _attr: 
+          "Id": r.rid
+          "Type": r.type
+          "Target": r.href
+          "TargetMode": r.targetMode
+      ]
+  
   out = 
     relationships: relationships
     markup:
@@ -499,6 +539,7 @@ buildDocumentObjectFromFragments = (fragments) ->
       ,
         "w:body": docObjFragments
       ]
+  # console.log JSON.stringify(out, null, 2)
   out
 
 buildDocumentFromFragments = (fragments, outputFile) =>
@@ -565,14 +606,14 @@ buildDocumentFromFragments = (fragments, outputFile) =>
 
   outputFile
 
-buildDocumentFromMarkdown = (inputMarkdown, outputFile, levelOffset) =>
+buildDocumentFromMarkdown = (inputMarkdown, outputFile, levelOffset, rootPath) =>
   if not outputFile
     info = temp.openSync "md2word"
     outputFile = info.path
 
   markdownJSON = markdown.parse( inputMarkdown )
-  fragments = processMarkdownObject markdownJSON, levelOffset
-  buildDocumentFromFragments fragments, outputFile, levelOffset
+  fragments = processMarkdownObject markdownJSON, levelOffset, rootPath
+  buildDocumentFromFragments fragments, outputFile, levelOffset, rootPath
 
 
 
@@ -605,17 +646,19 @@ markdownFromUrl = (fileUrl, callback) =>
 
 module.exports = 
   documentFromFile: (filepath, outputFile, callback, levelOffset=0) ->
+    rootPath = path.dirname(path.resolve(filepath))
     markdownFromFile filepath, (err, data) ->
-      out = buildDocumentFromMarkdown data, outputFile, levelOffset
+      out = buildDocumentFromMarkdown data, outputFile, levelOffset, rootPath
       callback(null, out)
 
-  documentFromMarkdown: (inputMarkdown, outputFile, callback, levelOffset=0) ->
-    out = buildDocumentFromMarkdown inputMarkdown, outputFile, levelOffset
+  documentFromMarkdown: (inputMarkdown, outputFile, callback, levelOffset=0, rootPath=null) ->
+    out = buildDocumentFromMarkdown inputMarkdown, outputFile, levelOffset, rootPath
     callback(null, out)
 
   documentFromUrl: (fileUrl, outputFile, callback, levelOffset=0) ->
+    rootPath = url.parse(fileUrl)
     markdownFromUrl fileUrl, (err, data) ->
-      out = buildDocumentFromMarkdown(data, outputFile, levelOffset);
+      out = buildDocumentFromMarkdown data, outputFile, levelOffset, rootPath;
       callback(null, out);
 
   documentFromFragments: (fragments, outputFile, callback) ->
@@ -626,16 +669,16 @@ module.exports =
     markdownFromFile filepath, (err, data) ->
       markdownJSON = markdown.parse( data )
 
-      fragments = processMarkdownObject markdownJSON, levelOffset
+      fragments = processMarkdownObject markdownJSON, levelOffset, rootPath
       callback(null, fragments)
 
-  fragmentsFromMarkdown: (inputMarkdown, callback, levelOffset=0) ->
+  fragmentsFromMarkdown: (inputMarkdown, callback, levelOffset=0, rootPath=null) ->
     markdownJSON = markdown.parse( inputMarkdown )
-    fragments = processMarkdownObject markdownJSON, levelOffset
+    fragments = processMarkdownObject markdownJSON, levelOffset, rootPath
     callback(null, fragments)
 
-  fragmentsFromUrl: (fileUrl, callback, levelOffset=0) ->
+  fragmentsFromUrl: (fileUrl, callback, levelOffset, rootPath) ->
     markdownFromUrl fileUrl, (err, data) ->
       markdownJSON = markdown.parse( data )
-      fragments = processMarkdownObject markdownJSON, levelOffset
+      fragments = processMarkdownObject markdownJSON, levelOffset, rootPath
       callback(null, fragments)
